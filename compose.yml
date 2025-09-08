@@ -3,7 +3,7 @@ services:
     image: ollama/ollama:latest
     container_name: ollama
     ports:
-      - "11500:11434"
+      - "11500:11434" # NOTE: local環境に入れていると、11434ポートが使えないため11500にマッピング
     volumes:
       - ollama-data:/root/.ollama
     command: ["serve"]
@@ -22,7 +22,6 @@ services:
           target: /app
         - path: ./
           action: rebuild
-
 
 volumes:
   ollama-data:
