@@ -4,12 +4,14 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { DirectServerTransport } from "./libs/direct-transport.js";
 import { WeatherServer } from "./mcp-servers/get-weather.js";
 import { TimeServer } from "./mcp-servers/get-current-time.js";
+import { SpotifyServer } from "./mcp-servers/search-track.js";
+
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const servers = [WeatherServer, TimeServer];
+const servers = [WeatherServer, TimeServer, SpotifyServer];
 const clients: Record<string, Client> = {};
 
 (async () => {
