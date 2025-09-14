@@ -100,7 +100,7 @@ const query = async (client: Ollama, model: string, mcpTools: McpTools, prompt: 
 }
 
 // Ollama サーバーが起動するまで待機する関数
-async function waitForOllama(host: string, retries = 30, delay = 1000) {
+export async function waitForOllama(host: string, retries = 30, delay = 1000) {
   for (let i = 0; i < retries; i++) {
     try {
       const res = await fetch(`${host}/v1/models`);
