@@ -6,6 +6,10 @@ import { WeatherServer } from "./mcp-servers/get-weather.js";
 import { TimeServer } from "./mcp-servers/get-current-time.js";
 import { SpotifyServer } from "./mcp-servers/search-track.js";
 
+// 環境変数から取得
+const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID!;
+const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET!;
+const REDIRECT_URI = process.env.SPOTIFY_REDIRECT_URI!;
 
 const app = express();
 app.use(cors());
@@ -29,6 +33,7 @@ const clients: Record<string, Client> = {};
 })();
 
 // REST API
+// --- MCP ツール呼び出し用 API ---
 app.post("/api/tool/:name", async (req, res) => {
   const toolName = req.params.name;
   const args = req.body || {};
@@ -39,6 +44,60 @@ app.post("/api/tool/:name", async (req, res) => {
   try {
     const result = await client.callTool({ name: toolName, arguments: args });
     res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Spotify 認可コードをアクセストークンに交換する API ---
+app.post("/api/auth/callback", async (req, res) => {
+  const { code } = req.body;
+  if (!code) return res.status(400).json({ error: "code is required" });
+
+  const tokenUrl = "https://accounts.spotify.com/api/token";
+
+  try {
+    const response = await fetch(tokenUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization:
+          "Basic " +
+          Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString("base64"),
+      },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: REDIRECT_URI,
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      return res.status(500).json({ error: data });
+    }
+
+    res.json({
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+      expires_in: data.expires_in,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Spotify API を呼ぶ例 (/me) ---
+app.get("/api/me", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "No token provided" });
+
+  try {
+    const response = await fetch("https://api.spotify.com/v1/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await response.json();
+    res.json(data);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
