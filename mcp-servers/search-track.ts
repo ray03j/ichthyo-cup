@@ -1,8 +1,14 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { Ollama } from "ollama";
+import { waitForOllama } from "../index.js";
 
 const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID!;
 const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET!;
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "";
+const OLLAMA_HOST = process.env.OLLAMA_HOST || "http://localhost:11434";
+
+const ollama = new Ollama({ host: OLLAMA_HOST });
 
 async function getAccessToken() {
   const res = await fetch("https://accounts.spotify.com/api/token", {
@@ -132,7 +138,7 @@ server.tool(
       }) ?? [];
 
     return {
-      content: [{ type: "text", text: tracks.join("\n") }],
+      content: [{ type: "text", text: items.join("\n") }],
     };
   }
 );
