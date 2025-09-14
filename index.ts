@@ -100,7 +100,7 @@ const query = async (client: Ollama, model: string, mcpTools: McpTools, prompt: 
 }
 
 // Ollama サーバーが起動するまで待機する関数
-async function waitForOllama(host: string, retries = 30, delay = 1000) {
+export async function waitForOllama(host: string, retries = 30, delay = 1000) {
   for (let i = 0; i < retries; i++) {
     try {
       const res = await fetch(`${host}/v1/models`);
@@ -114,19 +114,11 @@ async function waitForOllama(host: string, retries = 30, delay = 1000) {
 
 // メイン処理
 async function main() {
-  const host = "http://ollama:11434";
+  const host = process.env.OLLAMA_HOST || "http://localhost:11434";
   await waitForOllama(host); // Ollama が起動するまで待つ
-
-  const client = new Ollama({ host });
 
   // MCP サーバー（時刻・天気）を登録
   const mcpTools = await getMcpTools([TimeServer, WeatherServer]);
-  const model = "qwen2:0.5b";
-
-  // モデル + ツールを組み合わせて質問する
-  await query(client, model, mcpTools, "東京の天気は？");
-  await query(client, model, mcpTools, "今日の青森と千葉の天気は？");
-  await query(client, model, mcpTools, "今日は何曜日？");
 
   // 後処理
   await mcpTools.close();
