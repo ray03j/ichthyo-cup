@@ -1,0 +1,9 @@
+FROM ollama/ollama:latest
+
+# Entrypoint スクリプトをコピー
+COPY entrypoint-ollama.sh /entrypoint-ollama.sh
+RUN chmod +x /entrypoint-ollama.sh
+
+EXPOSE 11434
+
+CMD ["/entrypoint-ollama.sh"]
