@@ -1,0 +1,8 @@
+FROM ollama/ollama:latest
+
+# モデルをビルド時に pull
+RUN ollama pull qwen2.5-coder:7b
+
+EXPOSE 11434
+
+CMD ["serve"]
