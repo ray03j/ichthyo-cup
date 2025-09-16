@@ -49,7 +49,16 @@ app.post("/api/tool/:name", async (req, res) => {
   }
 });
 
-// --- Spotify 認可コードをアクセストークンに交換する API ---
+// --- GET: Spotify 認可コードを受け取る ---
+app.get("/api/auth/callback", (req, res) => {
+  const code = req.query.code as string;
+  if (!code) return res.status(400).send("code is required");
+
+  // フロントエンドにcodeを返す
+  res.json({ code });
+});
+
+// --- POST: 認可コードをアクセストークンに交換する ---
 app.post("/api/auth/callback", async (req, res) => {
   const { code } = req.body;
   if (!code) return res.status(400).json({ error: "code is required" });
