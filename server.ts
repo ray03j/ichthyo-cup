@@ -64,6 +64,27 @@ app.post("/api/tool/:name", async (req, res) => {
   }
 });
 
+// --- Spotify ログイン開始 ---
+app.get("/api/auth/login", (req, res) => {
+  const state = crypto.randomBytes(16).toString("hex");
+  res.cookie("spotify_auth_state", state, {
+    httpOnly: true,
+    secure: false,
+    sameSite: "lax", // クロスオリジンでも Cookie 送信可能
+  });
+
+  const scope = "user-read-private user-read-email";
+  const query = new URLSearchParams({
+    client_id: CLIENT_ID,
+    response_type: "code",
+    redirect_uri: REDIRECT_URI,
+    scope,
+    state,
+  });
+
+  res.redirect(`https://accounts.spotify.com/authorize?${query.toString()}`);
+});
+
 // --- GET: Spotify 認可コードを受け取る ---
 app.get("/api/auth/callback", (req, res) => {
   const code = req.query.code as string;
