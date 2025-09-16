@@ -11,6 +11,14 @@ const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID!;
 const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET!;
 const REDIRECT_URI = process.env.SPOTIFY_REDIRECT_URI!;
 
+type SpotifyTokenResponse = {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  refresh_token?: string;
+  scope: string;
+};
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -81,7 +89,7 @@ app.post("/api/auth/callback", async (req, res) => {
       }),
     });
 
-    const data = await response.json();
+    const data = (await response.json()) as SpotifyTokenResponse;
     if (!response.ok) {
       return res.status(500).json({ error: data });
     }
