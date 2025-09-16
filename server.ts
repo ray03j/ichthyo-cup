@@ -85,23 +85,17 @@ app.get("/api/auth/login", (req, res) => {
   res.redirect(`https://accounts.spotify.com/authorize?${query.toString()}`);
 });
 
-// --- GET: Spotify 認可コードを受け取る ---
-app.get("/api/auth/callback", (req, res) => {
-  const code = req.query.code as string;
+// --- Spotify コールバック ---
+app.get("/api/auth/callback", async (req, res) => {
+  const code = req.query.code as string | undefined;
+  const state = req.query.state as string | undefined;
+  const storedState = req.cookies["spotify_auth_state"];
+
+  if (!state || state !== storedState) return res.status(400).send("State mismatch");
   if (!code) return res.status(400).send("code is required");
 
-  // フロントエンドにcodeを返す
-  res.json({ code });
-});
-
-// --- POST: 認可コードをアクセストークンに交換する ---
-app.post("/api/auth/callback", async (req, res) => {
-  const { code } = req.body;
-  if (!code) return res.status(400).json({ error: "code is required" });
-
-  const tokenUrl = "https://accounts.spotify.com/api/token";
-
   try {
+    const tokenUrl = "https://accounts.spotify.com/api/token";
     const response = await fetch(tokenUrl, {
       method: "POST",
       headers: {
@@ -121,12 +115,16 @@ app.post("/api/auth/callback", async (req, res) => {
     if (!response.ok) {
       return res.status(500).json({ error: data });
     }
-
-    res.json({
-      access_token: data.access_token,
-      refresh_token: data.refresh_token,
-      expires_in: data.expires_in,
+    // Cookie にアクセストークンを保存
+    res.cookie("spotify_access_token", data.access_token, {
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax",
+      maxAge: data.expires_in * 1000,
     });
+
+    // フロントにリダイレクト
+    res.redirect("http://127.0.0.1:3000/chat");
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
