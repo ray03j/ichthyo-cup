@@ -1,5 +1,7 @@
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
+import crypto from "crypto";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { DirectServerTransport } from "./libs/direct-transport.js";
 import { WeatherServer } from "./mcp-servers/get-weather.js";
@@ -20,8 +22,13 @@ type SpotifyTokenResponse = {
 };
 
 const app = express();
-app.use(cors());
+
+app.use(cors({
+  origin: "http://127.0.0.1:3000", // フロントのオリジン
+  credentials: true,
+}));
 app.use(express.json());
+app.use(cookieParser());
 
 const servers = [WeatherServer, TimeServer, SpotifyServer];
 const clients: Record<string, Client> = {};
