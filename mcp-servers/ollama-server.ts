@@ -117,7 +117,7 @@ OllamaServer.tool(
 
 // Spotify検索用クエリ分類ツール
 OllamaServer.tool(
-  "classify-spotify-query",
+  "classify-spotify-query-search",
   "自然文をSpotify検索用の {type, keyword} に変換する",
   {
     query: z.string({ description: "ユーザーの自然文入力" }),
