@@ -44,6 +44,7 @@ const clients: Record<string, Client> = {};
 
     const tools = await client.listTools();
     for (const tool of tools.tools) {
+      // NOTE: tool 名の衝突に注意。現状は最後に登録したものが優先される。
       clients[tool.name] = client;
     }
   }
