@@ -60,25 +60,10 @@ server.tool(
                     (item: any, index: number) =>
                         `${index + 1}. ${item.title}\n   - URL: ${item.url}\n   - 概要: ${item.description}`,
                 )
-                .join("\n\n");
+                .join("\n\n") || "検索結果が見つかりませんでした。";
 
-            if (!items || items.length === 0) {
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: "検索結果が見つかりませんでした。",
-                        },
-                    ],
-                };
-            }
+      return { content: [{ type: "text", text: items }] };
 
-            const resultText = `「${query}」に関するウェブ検索結果:\n${items}`;
-
-            // 整形した結果を返す
-            return {
-                content: [{type: "text", text: resultText}],
-            };
         } catch (error) {
             console.error("Brave Searchでエラーが発生しました:", error);
             return {
