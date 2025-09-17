@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { Ollama } from "ollama";
 
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3";
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "qwen2.5-coder:7b";
 const OLLAMA_HOST = process.env.OLLAMA_HOST || "http://localhost:11434";
 const BRAVE_API_KEY = process.env.BRAVE_API_KEY!;
 
@@ -118,18 +118,9 @@ keywordは具体的な楽曲、アーティスト、アルバム、またはプ�
       const json = JSON.parse(content);
       resultText = JSON.stringify(json);
     } catch {
-      resultText = JSON.stringify({ type: "track", keyword: query }); // fallback
-      // console.warn("Ollama 推論 JSON parse error, fallback:", err);
-      // return [{type: "playlist", keyword: query}];
+      resultText = JSON.stringify([{ type: "track", keyword: query }]);
     }
 
-    return {
-      content: [
-        {
-          type: "text",
-          text: resultText,
-        },
-      ],
-    };
-  }
+    return { content: [{ type: "text", text: resultText }] };
+  },
 );
