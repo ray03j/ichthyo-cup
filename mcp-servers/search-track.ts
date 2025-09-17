@@ -99,45 +99,7 @@ JSON 形式のみで出力してください。
     return json; // [{type, keyword}, ...]
   } catch (err) {
     console.warn("Ollama 推論 JSON parse error, fallback:", err);
-    return [{ type: "track", keyword: query }];
-  }
-}
-
-// 2. 分類関数（推論結果から検索用に選ぶ）
-async function classifyInference(inference: any[]) {
-  const prompt = `
-あなたはSpotify検索用の分類アシスタントです。
-次の入力から、検索タイプを "track" / "artist" / "album" のいずれかに分類してください。
-出力は JSON 形式で {"type": ..., "keyword": ...} のみ返してください。
-
-例:
-入力: [{"type":"track","keyword":"Lemon"},{"type":"artist","keyword":"米津玄師"}]
-出力: {"type": "track", "keyword": "Lemon 米津玄師"}
-
-入力: [{"type":"album","keyword":"First Love"},{"type":"artist","keyword":"宇多田ヒカル"}]
-出力: {"type": "album", "keyword": "First Love"}
-
-入力: [{"type":"track","keyword":"前前前世"},{"type":"artist","keyword":"RADWIMPS"}]
-出力: {"type": "track", "keyword": "前前前世 RADWIMPS"}
-
-入力: ${JSON.stringify(inference)}
-出力:
-`;
-
-  const response = await ollama.chat({
-    model: OLLAMA_MODEL,
-    messages: [{ role: "user", content: prompt }],
-  });
-
-  let content = response.message.content;
-  content = content.replace(/```json\s*([\s\S]*?)```/i, "$1").trim();
-
-  try {
-    const json = JSON.parse(content);
-    return json; // {type, keyword}
-  } catch (err) {
-    console.warn("Ollama 分類 JSON parse error, fallback:", err);
-    return { type: inference[0]?.type || "track", keyword: inference[0]?.keyword || "" };
+        return [{type: "playlist", keyword: query}];
   }
 }
 
@@ -151,31 +113,52 @@ server.tool(
   "search-track",
   "Spotifyで曲を検索する",
   {
-    query: z.string({ description: "検索したい曲名やアーティスト名" }),
+        query: z.string({description: "検索したい曲名やアーティスト名"}),
   },
-  async ({ query }) => {
-    // 1. Ollama で自由推論
-    const inference = await ollamaFreeInference(query);
-    console.log("Ollama inference:", inference);
+    async ({query}) => {
+        // 1. Ollama で自由推論を実行し、複数の候補を取得
+        const inferences = await ollamaFreeInference(query);
+        console.log("Ollama inferences:", inferences);
 
-    // 2. 推論結果を分類して Spotify 検索用に変換
-    const { type, keyword } = await classifyInference(inference);
-    console.log("Selected for Spotify:", type, keyword);
-
-    // 3. Spotify検索
+        // 2. Spotifyのアクセストークンを取得
     const token = await getAccessToken();
-    const res = await fetch(
-      `https://api.spotify.com/v1/search?q=${encodeURIComponent(
-        keyword
-      )}&type=${type}&limit=3`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
-    );
-    const data = await res.json();
 
-    const items =
-      data[type + "s"].items.map((item: any) => {
+        // 3. 各推論結果に対して並列でSpotify検索を実行
+        const searchPromises = inferences.map((inference: any) => {
+            const {type, keyword} = inference;
+            const validType = ["track", "artist", "album", "playlist"].includes(
+                type,
+            )
+                ? type
+                : "playlist";
+            const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(
+                keyword,
+            )}&type=${validType}&market=JP&limit=1`; // 各検索で最も関連性の高い1件を取得
+
+            return fetch(url, {
+                headers: {Authorization: `Bearer ${token}`},
+            }).then((res) => res.json());
+        });
+
+        const searchResults = await Promise.all(searchPromises);
+
+        // 4. すべての検索結果を整形してまとめる
+        const items = searchResults.flatMap((data, index) => {
+            const inference = inferences[index];
+            const type = ["track", "artist", "album", "playlist"].includes(
+                inference.type,
+            )
+                ? inference.type
+                : "playlist";
+            const resultItems = data[type + "s"]?.items;
+
+            if (!resultItems || resultItems.length === 0) {
+                return [
+                    `- '${inference.keyword}' の検索結果が見つかりませんでした。`,
+                ];
+            }
+
+            const item = resultItems[0];
         if (type === "track") {
           const artists = item.artists.map((a: any) => a.name).join(", ");
           return `${item.name} - ${artists} (${item.external_urls.spotify})`;
