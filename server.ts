@@ -7,6 +7,7 @@ import { DirectServerTransport } from "./libs/direct-transport.js";
 import { WeatherServer } from "./mcp-servers/get-weather.js";
 import { TimeServer } from "./mcp-servers/get-current-time.js";
 import { SpotifyServer } from "./mcp-servers/search-track.js";
+import { BraveSearchServer } from "./mcp-servers/brave-search.js";
 
 // 環境変数から取得
 const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID!;
@@ -30,7 +31,7 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
-const servers = [WeatherServer, TimeServer, SpotifyServer];
+const servers = [WeatherServer, TimeServer, SpotifyServer, BraveSearchServer];
 const clients: Record<string, Client> = {};
 
 (async () => {
