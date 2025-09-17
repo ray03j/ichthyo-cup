@@ -3,10 +3,20 @@ services:
     image: ollama/ollama:latest
     container_name: ollama
     ports:
-      - "11500:11434" # NOTE: local環境に入れていると、11434ポートが使えないため11500にマッピング
+      - "11500:11434"
     volumes:
       - ollama-data:/root/.ollama
     command: ["serve"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
   mcp-server:
     build: .
@@ -19,10 +29,10 @@ services:
       - .env 
     develop:
       watch:
-        - path: ./
+        - path: ./ 
           action: sync
           target: /app
-        - path: ./
+        - path: ./ 
           action: rebuild
 
 volumes:
