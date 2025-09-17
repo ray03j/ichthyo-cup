@@ -33,11 +33,7 @@ async function braveSearch(query: string): Promise<string> {
     }
 
     try {
-<<<<<<< Updated upstream
-        const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&country=JP`;
-=======
         const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query + " 曲")}&country=JP`;
->>>>>>> Stashed changes
         const response = await fetch(url, {
             headers: {
                 "X-Subscription-Token": BRAVE_API_KEY,
@@ -48,14 +44,9 @@ async function braveSearch(query: string): Promise<string> {
             return `Search failed with status: ${response.status}`;
 
         const data = await response.json();
-<<<<<<< Updated upstream
-        // 検索結果の上位3件を要約して返す
-        return data.web?.results
-            .slice(0, 3)
-=======
+
         return data.web?.results
             .slice(0, 20)
->>>>>>> Stashed changes
             .map(
                 (item: any) =>
                     `Title: ${item.title}\nURL: ${item.url}\nSnippet: ${item.description}`,
@@ -74,76 +65,6 @@ async function ollamaFreeInference(query: string) {
     console.log("[Brave Search] Results received.");
 
     const prompt = `
-<<<<<<< Updated upstream
-あなたは音楽に詳しいアシスタントです。
-ユーザーの入力 "${query}" について、ウェブ検索を実行しました。
-
-[ウェブ検索結果]
-${searchResults}
-[ウェブ検索結果ここまで]
-
-上記のウェブ検索結果の情報のみを参考にして、ユーザーの入力に最も関連性の高い曲を3曲提案し、
-曲名、アーティスト名、アルバム名をまとめてください。
-
-下記は代表的な音楽ジャンルと、それを形成するとされる要素の目安を一覧にしたものです。
-
-「ロック」の曲調を形成する要素:
-・歪んだエレキギターのサウンド
-・速いテンポ
-・激しい演奏
-・叫ぶようなボーカル
-・ギター、ベース、ドラムのバンド編成によるサウンド
-・体を動かしたくなるようなリズム
-
-「R&B」の曲調を形成する要素:
-・16ビート（横ノリ）のリズム
-・複雑なハーモニー
-・きらびやかな雰囲気のあるサウンド
-・ソウルフルな（深みのある）ボーカル
-
-「ポップ」の曲調を形成する要素:
-・明るいサウンド
-・親しみやすいサウンド
-・コミカルな雰囲気のあるサウンド
-・曲構成が明確で把握しやすい
-・理解しやすく共感しやすい歌詞のテーマ
-・軽快なリズム
-
-「ジャズ」の曲調を形成する要素:
-・ドラム、ベース、アコースティックピアノに管楽器を含む編成によるサウンド
-・4ビートのリズム（それを体現するベースの奏法）
-・複雑なハーモニー
-・インプロビゼーション（即興）的な演奏内容
-・管楽器のソロパート
-・アフリカ音楽的な（西洋音楽的な要素が希薄な）リズムと音階の解釈
-
-「EDM」の曲調を形成する要素:
-・シンセサイザーなどのデジタルサウンド
-・音圧のあるサウンド
-・踊り出したくなるようなリズム
-・規則的なリズム
-
-「フォーク」の曲調を形成する要素:
-・アコースティックギターを中心とする生楽器のサウンド
-・シンプルな楽器編成
-・ゆったりしたテンポ
-・親しみやすい曲構成
-・身近だと感じられる内容を扱った歌詞
-
-以下のルールに従い、3つの候補を提案してください。
-・出力は JSON 配列で、各要素は "type" (track / artist / album / playlist) と "keyword" を持ちます。
-・typeが"track"または"album"の場合、keywordには曲名(またはアルバム名)とアーティスト名を含めてください。
-例: {"type": "track", "keyword": "曲名 アーティスト名"}
-    {"type": "album", "keyword": "アルバム名 アーティスト名"}
-必ずこの出力ルールにのっとり、余分な説明やテキストは一切含めずに出力してください。
-
-入力: "${query}"
-出力:[{"type": ..., "keyword": ...},
-{"type": ..., "keyword": ...},
-{"type": ..., "keyword": ...}]
-`;
-
-=======
 # 命令(Instruction)
 あなたは、与えられたウェブ検索結果から楽曲情報を正確に抽出し、指定されたJSON形式で出力するAIです。提供された情報源に忠実に従ってください。
 
@@ -190,7 +111,6 @@ keywordは具体的な楽曲、アーティスト、アルバム、またはプ�
 # 出力
 `;
 
->>>>>>> Stashed changes
     const response = await ollama.chat({
         model: OLLAMA_MODEL,
         messages: [{role: "user", content: prompt}],
@@ -231,17 +151,12 @@ server.tool(
         // 3. 各推論結果に対して並列でSpotify検索を実行
         const searchPromises = inferences.map((inference: any) => {
             const {type, keyword} = inference;
-<<<<<<< Updated upstream
-            const validType = ["track", "artist", "album", "playlist"].includes(type)
-                ? type
-                : "playlist"; // groupなどをtrackにフォールバック
-=======
+
             const validType = ["track", "artist", "album", "playlist"].includes(
                 type,
             )
                 ? type
                 : "playlist";
->>>>>>> Stashed changes
             const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(
                 keyword,
             )}&type=${validType}&market=JP&limit=1`; // 各検索で最も関連性の高い1件を取得
@@ -256,13 +171,9 @@ server.tool(
         // 4. すべての検索結果を整形してまとめる
         const items = searchResults.flatMap((data, index) => {
             const inference = inferences[index];
-<<<<<<< Updated upstream
-            const type = ["track", "artist", "album", "playlist"].includes(inference.type)
-=======
             const type = ["track", "artist", "album", "playlist"].includes(
                 inference.type,
             )
->>>>>>> Stashed changes
                 ? inference.type
                 : "playlist";
             const resultItems = data[type + "s"]?.items;
@@ -288,11 +199,7 @@ server.tool(
                 return [
                     `- Album: ${item.name} - ${artists} (${item.external_urls.spotify})`,
                 ];
-<<<<<<< Updated upstream
-            }else if (type === "playlist") {
-=======
             } else if (type === "playlist") {
->>>>>>> Stashed changes
                 return [
                     `- Playlist: ${item.name} (${item.external_urls.spotify})`,
                 ];
