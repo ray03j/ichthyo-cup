@@ -7,6 +7,16 @@ import { DirectServerTransport } from "./libs/direct-transport.js";
 import { WeatherServer } from "./mcp-servers/get-weather.js";
 import { TimeServer } from "./mcp-servers/get-current-time.js";
 import { SpotifyServer } from "./mcp-servers/search-track.js";
+import { OllamaServer } from "./mcp-servers/ollama-server.js";
+import os from "os";
+
+// ---- メモリチェック関数 ----
+const MIN_REQUIRED_MEMORY = 6 * 1024 * 1024 * 1024; // 6 GiB
+function checkMemory() {
+  const free = os.freemem();
+  console.log(`[Memory] free: ${(free / (1024 * 1024 * 1024)).toFixed(2)} GiB`);
+  return free >= MIN_REQUIRED_MEMORY;
+}
 
 // 環境変数から取得
 const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID!;
@@ -21,16 +31,21 @@ type SpotifyTokenResponse = {
   scope: string;
 };
 
+// classify-spotify-query のレスポンス型
+type ToolContentItem = { text?: string };
+
 const app = express();
 
-app.use(cors({
-  origin: "http://127.0.0.1:3000", // フロントのオリジン
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: "http://127.0.0.1:3000", // フロントのオリジン
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use(cookieParser());
 
-const servers = [WeatherServer, TimeServer, SpotifyServer];
+const servers = [WeatherServer, TimeServer, SpotifyServer, OllamaServer];
 const clients: Record<string, Client> = {};
 
 (async () => {
@@ -52,14 +67,17 @@ const clients: Record<string, Client> = {};
 app.post("/api/tool/:name", async (req, res) => {
   const toolName = req.params.name;
   const args = req.body || {};
-
-  const client = clients[toolName];
-  if (!client) return res.status(404).json({ error: "Tool not found" });
+  console.log(`[API] ${toolName} called with args:`, args);
 
   try {
+    const client = clients[toolName];
+    if (!client) return res.status(404).json({ error: "Tool not found" });
+
     const result = await client.callTool({ name: toolName, arguments: args });
     res.json(result);
+
   } catch (err: any) {
+    console.error("[API] Error:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -70,7 +88,7 @@ app.get("/api/auth/login", (req, res) => {
   res.cookie("spotify_auth_state", state, {
     httpOnly: true,
     secure: false,
-    sameSite: "lax", // クロスオリジンでも Cookie 送信可能
+    sameSite: "lax",
   });
 
   const scope = "user-read-private user-read-email";
@@ -101,8 +119,7 @@ app.get("/api/auth/callback", async (req, res) => {
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
         Authorization:
-          "Basic " +
-          Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString("base64"),
+          "Basic " + Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString("base64"),
       },
       body: new URLSearchParams({
         grant_type: "authorization_code",
@@ -115,7 +132,7 @@ app.get("/api/auth/callback", async (req, res) => {
     if (!response.ok) {
       return res.status(500).json({ error: data });
     }
-    // Cookie にアクセストークンを保存
+
     res.cookie("spotify_access_token", data.access_token, {
       httpOnly: true,
       secure: false,
@@ -123,7 +140,6 @@ app.get("/api/auth/callback", async (req, res) => {
       maxAge: data.expires_in * 1000,
     });
 
-    // フロントにリダイレクト
     res.redirect("http://127.0.0.1:3000/chat");
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -146,7 +162,6 @@ app.get("/api/me", async (req, res) => {
   }
 });
 
-
-app.listen(4000, '0.0.0.0', () => {
+app.listen(4000, "0.0.0.0", () => {
   console.log("Server running at http://127.0.0.1:4000");
 });

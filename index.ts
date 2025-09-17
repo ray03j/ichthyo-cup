@@ -5,6 +5,8 @@ import { DirectServerTransport } from "./libs/direct-transport.js";
 
 import { TimeServer } from "./mcp-servers/get-current-time.js";
 import { WeatherServer } from "./mcp-servers/get-weather.js";
+import { OllamaServer } from "./mcp-servers/ollama-server.js";
+import { SpotifyServer } from "./mcp-servers/search-track.js";
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
@@ -48,7 +50,7 @@ const getMcpTools = async (servers: McpServer[]): Promise<McpTools> => {
   return { tools, functionMap, close };
 };
 
-// モデルに質問を投げて、さらに MCP ツールも実行する関数
+// Ollama に質問し、MCP ツールを呼び出す
 const query = async (client: Ollama, model: string, mcpTools: McpTools, prompt: string) => {
   console.log(`\n[question] ${prompt}`);
 
@@ -118,7 +120,7 @@ async function main() {
   await waitForOllama(host); // Ollama が起動するまで待つ
 
   // MCP サーバー（時刻・天気）を登録
-  const mcpTools = await getMcpTools([TimeServer, WeatherServer]);
+  const mcpTools = await getMcpTools([TimeServer, WeatherServer, SpotifyServer, OllamaServer]);
 
   // 後処理
   await mcpTools.close();
