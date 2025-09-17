@@ -33,7 +33,11 @@ async function braveSearch(query: string): Promise<string> {
     }
 
     try {
+<<<<<<< Updated upstream
         const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&country=JP`;
+=======
+        const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query + " 曲")}&country=JP`;
+>>>>>>> Stashed changes
         const response = await fetch(url, {
             headers: {
                 "X-Subscription-Token": BRAVE_API_KEY,
@@ -44,9 +48,14 @@ async function braveSearch(query: string): Promise<string> {
             return `Search failed with status: ${response.status}`;
 
         const data = await response.json();
+<<<<<<< Updated upstream
         // 検索結果の上位3件を要約して返す
         return data.web?.results
             .slice(0, 3)
+=======
+        return data.web?.results
+            .slice(0, 20)
+>>>>>>> Stashed changes
             .map(
                 (item: any) =>
                     `Title: ${item.title}\nURL: ${item.url}\nSnippet: ${item.description}`,
@@ -65,6 +74,7 @@ async function ollamaFreeInference(query: string) {
     console.log("[Brave Search] Results received.");
 
     const prompt = `
+<<<<<<< Updated upstream
 あなたは音楽に詳しいアシスタントです。
 ユーザーの入力 "${query}" について、ウェブ検索を実行しました。
 
@@ -133,6 +143,54 @@ ${searchResults}
 {"type": ..., "keyword": ...}]
 `;
 
+=======
+# 命令(Instruction)
+あなたは、与えられたウェブ検索結果から楽曲情報を正確に抽出し、指定されたJSON形式で出力するAIです。提供された情報源に忠実に従ってください。
+
+# 入力情報(Input)
+
+ユーザーの入力: "${query}"
+
+ウェブ検索結果:
+"""
+${searchResults}
+"""
+
+# 出力ルール(Output Rules)
+
+出力はJSON配列のみとし、説明文などを一切含めないでください。
+
+配列の各要素は、「type」と「keyword」のキーを持つJSONオブジェクトとします。
+
+配列の要素数は最大3つまでにしてください。
+
+keywordは具体的な楽曲、アーティスト、アルバム、またはプレイリストを指す文字列とします。
+
+「type」が「track」または「album」の場合、「keyword」の値は**絶対に「曲名またはアルバム名」「半角スペース」「アーティスト名」の形式にしてください。**このルールを厳守してください。
+
+ウェブ検索結果から適切な楽曲が見つからない場合、空の配列 [] を出力してください。
+
+# 手本(Example)
+
+入力例
+ユーザーの入力: "2023年にヒットしたJ-POP"
+
+ウェブ検索結果:
+"""
+2023年の音楽シーンを振り返ると、Official髭男dismの「Subtitle」が年間トップでした。また、YOASOBIの「アイドル」はアニメ主題歌として世界的なヒットを記録しました。アルバムでは、Mrs. GREEN APPLEの「ANTENNA」が多くのファンに支持されました。
+"""
+
+出力例
+[
+{"type": "track", "keyword": "Subtitle Official髭男dism"},
+{"type": "track", "keyword": "アイドル YOASOBI"},
+{"type": "album", "keyword": "ANTENNA Mrs. GREEN APPLE"}
+]
+
+# 出力
+`;
+
+>>>>>>> Stashed changes
     const response = await ollama.chat({
         model: OLLAMA_MODEL,
         messages: [{role: "user", content: prompt}],
@@ -173,9 +231,17 @@ server.tool(
         // 3. 各推論結果に対して並列でSpotify検索を実行
         const searchPromises = inferences.map((inference: any) => {
             const {type, keyword} = inference;
+<<<<<<< Updated upstream
             const validType = ["track", "artist", "album", "playlist"].includes(type)
                 ? type
                 : "playlist"; // groupなどをtrackにフォールバック
+=======
+            const validType = ["track", "artist", "album", "playlist"].includes(
+                type,
+            )
+                ? type
+                : "playlist";
+>>>>>>> Stashed changes
             const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(
                 keyword,
             )}&type=${validType}&market=JP&limit=1`; // 各検索で最も関連性の高い1件を取得
@@ -190,7 +256,13 @@ server.tool(
         // 4. すべての検索結果を整形してまとめる
         const items = searchResults.flatMap((data, index) => {
             const inference = inferences[index];
+<<<<<<< Updated upstream
             const type = ["track", "artist", "album", "playlist"].includes(inference.type)
+=======
+            const type = ["track", "artist", "album", "playlist"].includes(
+                inference.type,
+            )
+>>>>>>> Stashed changes
                 ? inference.type
                 : "playlist";
             const resultItems = data[type + "s"]?.items;
@@ -216,7 +288,11 @@ server.tool(
                 return [
                     `- Album: ${item.name} - ${artists} (${item.external_urls.spotify})`,
                 ];
+<<<<<<< Updated upstream
             }else if (type === "playlist") {
+=======
+            } else if (type === "playlist") {
+>>>>>>> Stashed changes
                 return [
                     `- Playlist: ${item.name} (${item.external_urls.spotify})`,
                 ];
