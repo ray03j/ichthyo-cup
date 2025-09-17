@@ -1,75 +1,44 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-interface Center {
-  name: string;
-  enName: string;
-  officeName?: string;
-  children?: string[];
-  parent?: string;
-  kana?: string;
-}
-interface Centers {
-  [key: string]: Center;
-}
-interface Area {
-  centers: Centers;
-  offices: Centers;
-  class10s: Centers;
-  class15s: Centers;
-  class20s: Centers;
-}
-
-interface Weather {
-  publishingOffice: string;
-  reportDatetime: Date;
-  targetArea: string;
-  headlineText: string;
-  text: string;
-}
-
-const server = new McpServer({
-  name: "天気予報サーバー",
-  version: "1.0.0",
+// 引数スキーマ
+const weatherArgsSchema = z.object({
+  name: z.string().describe("都市名（例: 東京、大阪、New York）"),
 });
 
-server.tool(
-  "get-weather",
-  `指定した都道府県の天気予報を返す`,
-  {
-    name: z.string({
-      description: "都道府県名の漢字、例「東京」",
-    }),
-  },
-  async ({ name: areaName }) => {
-    const result = await fetch(
-      "https://www.jma.go.jp/bosai/common/const/area.json"
-    )
-      .then((v) => v.json())
-      .then((v: Area) => v.offices)
-      .then((v: Centers) =>
-        Object.entries(v).flatMap(([id, { name }]) =>
-          name.includes(areaName) ? [id] : []
-        )
-      );
-    const weathers = await Promise.all(
-      result.map((id) =>
-        fetch(
-          `https://www.jma.go.jp/bosai/forecast/data/overview_forecast/${id}.json`
-        )
-          .then((v) => v.json())
-          .then((v: Weather) => v.text)
-      )
-    );
+// ツール関数は必ず1引数 extra
+export const getWeatherTool = async (extra: any) => {
+  console.log(extra)
+  const args = extra.arguments;
+  
+  const parsed = weatherArgsSchema.safeParse(args);
+  if (!parsed.success) {
     return {
-      content: [
-        {
-          type: "text",
-          text: weathers.join("---"),
-        },
-      ],
+      content: [{ type: "text" as const, text: "name is required" }],
+      isError: true,
     };
   }
+
+  return {
+    content: [
+      {
+        type: "text" as const,
+        text: `天気情報: ${args.name}`,
+      }
+    ],
+  };
+};
+
+// MCP サーバーに登録
+const server = new McpServer({ name: "天気予報サーバー", version: "1.0.0" });
+
+// ⚡ ここが重要：ZodObject ではなく .shape を渡す
+server.tool(
+  "get-weather", 
+  {
+    name: { type: "string", description: "都市名（例: 東京、大阪、New York）" }
+  }, 
+  getWeatherTool
 );
 
 export const WeatherServer = server;

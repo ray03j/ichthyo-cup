@@ -1,46 +1,33 @@
 import { Ollama } from "ollama";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { createInterface } from "readline/promises";
 
-import { DirectServerTransport } from "./libs/direct-transport.js";
-
-import { TimeServer } from "./mcp-servers/get-current-time.js";
-import { WeatherServer } from "./mcp-servers/get-weather.js";
-
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-
-// MCP ツールをまとめて管理する型
 type McpTools = {
-  tools: { name: string; description?: string }[]; // ツール一覧
-  functionMap: Record<string, Client>;             // ツール名 → クライアントの対応表
-  close: () => Promise<void>;                      // 全クライアントを閉じる関数
+  tools: { name: string; description?: string }[];
+  functionMap: Record<string, Client>;
+  close: () => Promise<void>;
 };
 
-// MCP サーバー群からツール一覧を収集して管理用オブジェクトを作成
-const getMcpTools = async (servers: McpServer[]): Promise<McpTools> => {
+const getMcpTools = async (servers: { name: string; url: string }[]): Promise<McpTools> => {
   const tools: McpTools["tools"] = [];
   const functionMap: Record<string, Client> = {};
   const clients: Client[] = [];
 
   for (const server of servers) {
-    // MCP クライアント作成
     const mcpClient = new Client({ name: "mcp-client-cli", version: "1.0.0" });
+    const transport = new StreamableHTTPClientTransport(new URL(server.url), { sessionId: undefined });
 
-    // サーバーと直接通信するトランスポートを作成
-    const transport = new DirectServerTransport();
-    server.connect(transport);
-    await mcpClient.connect(transport.getClientTransport());
-
+    await mcpClient.connect(transport);
     clients.push(mcpClient);
 
-    // サーバーが提供するツール一覧を取得
     const toolsResult = await mcpClient.listTools();
     for (const tool of toolsResult.tools) {
-      functionMap[tool.name] = mcpClient; // ツール名に対応するクライアントを保存
+      functionMap[tool.name] = mcpClient;
       tools.push({ name: tool.name, description: tool.description });
     }
   }
 
-  // 全クライアントをまとめて閉じる処理
   const close = async () => {
     await Promise.all(clients.map((v) => v.close()));
   };
@@ -48,63 +35,34 @@ const getMcpTools = async (servers: McpServer[]): Promise<McpTools> => {
   return { tools, functionMap, close };
 };
 
-// モデルに質問を投げて、さらに MCP ツールも実行する関数
 const query = async (client: Ollama, model: string, mcpTools: McpTools, prompt: string) => {
   console.log(`\n[question] ${prompt}`);
-
-  // Ollama に質問を投げる
-  const response = await client.generate({ model, prompt });
-
-  // 型安全のため any にキャスト
-  const r: any = response;
-
-  // モデルからの回答テキストを整形
-  let text = "";
-  if (r.output && Array.isArray(r.output)) {
-    text = r.output
-      .map((o: any) =>
-        o.content
-          .map((c: any) => ("text" in c ? c.text : ""))
-          .join("")
-      )
-      .join("\n");
-  }
+  const response: any = await client.generate({ model, prompt });
+  const text = response.output?.map((o: any) =>
+    o.content?.map((c: any) => c.text ?? "").join("")
+  ).join("\n") ?? "";
 
   console.log("[answer]", text);
 
-  // MCP ツールを順番に呼び出す
   for (const tool of mcpTools.tools) {
     const mcpClient = mcpTools.functionMap[tool.name];
-    if (mcpClient) {
-      let args: Record<string, any> = {};
+    if (!mcpClient) continue;
 
-      // ツールごとに必要な引数を準備
-      if (tool.name === "get-weather") {
-        args = { name: "東京" }; // 東京の天気を取得
-      }
-      // get-current-time は引数不要
+    let args: Record<string, any> = {};
+    if (tool.name === "get-weather") args = { name: "東京" };
 
-      // ツールを呼び出し
-      const toolResult = await mcpClient.callTool({
-        name: tool.name,
-        arguments: args,
-      });
-
-      // ツールの結果を表示
-      const content = toolResult.content as any[];
-      content.forEach((c) => {
-        if (c.type === "text") console.log(`[tool: ${tool.name}]`, c.text);
-      });
-    }
+    const toolResult = await mcpClient.callTool({ name: tool.name, arguments: args });
+    (toolResult.content as any[]).forEach(c => {
+      if (c.type === "text") console.log(`[tool: ${tool.name}]`, c.text);
+    });
   }
-}
+};
 
-// Ollama サーバーが起動するまで待機する関数
 export async function waitForOllama(host: string, retries = 30, delay = 1000) {
   for (let i = 0; i < retries; i++) {
     try {
       const res = await fetch(`${host}/v1/models`);
-      if (res.ok) return; // サーバー応答があれば成功
+      if (res.ok) return;
     } catch {}
     console.log("Waiting for Ollama server...");
     await new Promise(r => setTimeout(r, delay));
@@ -112,16 +70,48 @@ export async function waitForOllama(host: string, retries = 30, delay = 1000) {
   throw new Error("Ollama server not responding");
 }
 
-// メイン処理
+// CLI ループ
 async function main() {
   const host = process.env.OLLAMA_HOST || "http://localhost:11434";
-  await waitForOllama(host); // Ollama が起動するまで待つ
+  await waitForOllama(host);
 
-  // MCP サーバー（時刻・天気）を登録
-  const mcpTools = await getMcpTools([TimeServer, WeatherServer]);
+  const ollama = new Ollama({ host });
 
-  // 後処理
-  await mcpTools.close();
+  // MCP サーバー URL を指定
+  const mcpServers = [
+    { name: "time", url: "http://localhost:4000/mcp" },
+    { name: "weather", url: "http://localhost:4000/mcp" }
+  ];
+  const mcpTools = await getMcpTools(mcpServers);
+
+  const readline = createInterface({ input: process.stdin, output: process.stdout });
+
+  while (true) {
+    console.log("\nCommands: list-tools | call-tool | exit");
+    const answer = await readline.question("Enter command: ");
+
+    switch (answer) {
+      case "list-tools":
+        mcpTools.tools.forEach(t => console.log(t.name, "-", t.description));
+        break;
+
+      case "call-tool":
+        const prompt = await readline.question("Enter your prompt: ");
+        await query(ollama, "ollama", mcpTools, prompt);
+        break;
+
+      case "exit":
+        await mcpTools.close();
+        readline.close();
+        process.exit(0);
+
+      default:
+        console.log("Unknown command:", answer);
+    }
+  }
 }
 
-main();
+main().catch(async (err) => {
+  console.error(err);
+  process.exit(1);
+});
