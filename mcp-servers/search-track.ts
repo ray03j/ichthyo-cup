@@ -161,20 +161,30 @@ server.tool(
             const item = resultItems[0];
         if (type === "track") {
           const artists = item.artists.map((a: any) => a.name).join(", ");
-          return `${item.name} - ${artists} (${item.external_urls.spotify})`;
+                return [
+                    `- ${item.name} - ${artists} (${item.external_urls.spotify})`,
+                ];
         } else if (type === "artist") {
-          return `Artist: ${item.name} (${item.external_urls.spotify})`;
+                return [
+                    `- Artist: ${item.name} (${item.external_urls.spotify})`,
+                ];
         } else if (type === "album") {
-          return `Album: ${item.name} - ${item.artists
-            .map((a: any) => a.name)
-            .join(", ")} (${item.external_urls.spotify})`;
+                const artists = item.artists.map((a: any) => a.name).join(", ");
+                return [
+                    `- Album: ${item.name} - ${artists} (${item.external_urls.spotify})`,
+                ];
+            } else if (type === "playlist") {
+                return [
+                    `- Playlist: ${item.name} (${item.external_urls.spotify})`,
+                ];
         }
-      }) ?? [];
+            return [];
+        });
 
     return {
-      content: [{ type: "text", text: items.join("\n") }],
+            content: [{type: "text", text: items.join("\n")}],
     };
-  }
+    },
 );
 
 export const SpotifyServer = server;
