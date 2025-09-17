@@ -6,7 +6,8 @@ import { DirectServerTransport } from "./libs/direct-transport.js";
 import { TimeServer } from "./mcp-servers/get-current-time.js";
 import { WeatherServer } from "./mcp-servers/get-weather.js";
 
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type {McpServer} from "@modelcontextprotocol/sdk/server/mcp.js";
+import { SpotifyServer } from "./mcp-servers/search-track.js";
 
 // MCP ツールをまとめて管理する型
 type McpTools = {
@@ -118,7 +119,14 @@ async function main() {
   await waitForOllama(host); // Ollama が起動するまで待つ
 
   // MCP サーバー（時刻・天気）を登録
-  const mcpTools = await getMcpTools([TimeServer, WeatherServer]);
+    const mcpTools = await getMcpTools([
+        TimeServer,
+        WeatherServer,
+        SpotifyServer,
+    ]);
+
+    const ollama = new Ollama({host});
+    const model = process.env.OLLAMA_MODEL;
 
   // 後処理
   await mcpTools.close();
