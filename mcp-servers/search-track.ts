@@ -25,77 +25,119 @@ async function getAccessToken() {
   return data.access_token as string;
 }
 
-async function classifyQuery(query: string) {
-  console.log("=== Ollama Classify ===");
-  console.log("入力クエリ:", query);
-  console.log("使用モデル:", OLLAMA_MODEL);
-
+// 1. Ollamaで自由に推論して関連情報を取得
+async function ollamaFreeInference(query: string) {
   const prompt = `
-あなたはSpotify検索用の分類アシスタントです。
-ユーザーの入力に応じて、検索タイプを以下のカテゴリに分類してください:
-- "track"（曲）
-- "artist"（アーティスト）
-- "album"（アルバム）
+あなたは音楽に詳しいアシスタントです。
+ユーザーの入力 "${query}" について、
+曲名、アーティスト名、アルバム名に加えて、
+関連するグループやジャンルなども抽象的にまとめてください。
+出力は JSON 配列で、各要素は "type" (track / artist / album / group / genre) と "keyword" を持ちます。
+JSON 形式のみで出力してください。
 
-出力は必ず JSON 形式のみで、以下のキーを持たせてください:
-{
-  "type": <カテゴリ>,
-  "keyword": <検索に使うキーワード>
-}
-
-例をいくつか示します:
-
-入力: "Lemon"
-出力: {"type": "track", "keyword": "Lemon"}
-
-入力: "米津玄師"
-出力: {"type": "artist", "keyword": "米津玄師"}
-
+例:
 入力: "Lemon 米津玄師"
-出力: {"type": "track", "keyword": "Lemon 米津玄師"}
-
-入力: "アルバム STRAY SHEEP"
-出力: {"type": "album", "keyword": "STRAY SHEEP"}
+出力: [
+  {"type": "track", "keyword": "Lemon"},
+  {"type": "artist", "keyword": "米津玄師"}
+]
 
 入力: "宇多田ヒカル First Love"
-出力: {"type": "album", "keyword": "First Love"}
+出力: [
+  {"type": "album", "keyword": "First Love"},
+  {"type": "artist", "keyword": "宇多田ヒカル"}
+]
+
+入力: "RADWIMPS 前前前世"
+出力: [
+  {"type": "track", "keyword": "前前前世"},
+  {"type": "artist", "keyword": "RADWIMPS"}
+]
+
+入力: "坂道グループ"
+出力: [
+  {"type": "group", "keyword": "乃木坂46"},
+  {"type": "group", "keyword": "欅坂46"},
+  {"type": "group", "keyword": "日向坂46"}
+]
+
+入力: "BUMP OF CHICKEN 天体観測"
+出力: [
+  {"type": "track", "keyword": "天体観測"},
+  {"type": "artist", "keyword": "BUMP OF CHICKEN"},
+  {"type": "genre", "keyword": "ロック"}
+]
+
+入力: "Official髭男dism Pretender"
+出力: [
+  {"type": "track", "keyword": "Pretender"},
+  {"type": "artist", "keyword": "Official髭男dism"},
+  {"type": "genre", "keyword": "ポップ"}
+]
+
+入力: "あいみょん マリーゴールド"
+出力: [
+  {"type": "track", "keyword": "マリーゴールド"},
+  {"type": "artist", "keyword": "あいみょん"},
+  {"type": "genre", "keyword": "J-POP"}
+]
 
 入力: "${query}"
 出力:
 `;
 
+  const response = await ollama.chat({
+    model: OLLAMA_MODEL,
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  let content = response.message.content;
+  content = content.replace(/```json\s*([\s\S]*?)```/i, "$1").trim();
 
   try {
-    await waitForOllama(OLLAMA_HOST); // Ollama が起動するまで待つ
-
-    const response = await ollama.chat({
-      model: OLLAMA_MODEL,
-      messages: [{ role: "user", content: prompt }],
-    });
-
-    console.log("Classify raw response:", response);
-
-    if (!response?.message?.content) {
-      console.warn("⚠ Ollama 応答に content がありません。fallback に移行します");
-      return { type: "track", keyword: query };
-    }
-
-    try {
-      let content = response.message.content;
-
-      // ```json ... ``` のコードブロックを除去
-      content = content.replace(/```json\s*([\s\S]*?)```/i, '$1').trim();
-
-      const json = JSON.parse(content);
-      console.log("Classify parsed JSON:", json);
-      return json;
-    } catch (parseErr) {
-      console.error("⚠ JSON parse error:", parseErr);
-      return { type: "track", keyword: query }; // fallback
-    }
+    const json = JSON.parse(content);
+    return json; // [{type, keyword}, ...]
   } catch (err) {
-    console.error("⚠ Ollama API 呼び出しエラー:", err);
-    return { type: "track", keyword: query }; // fallback
+    console.warn("Ollama 推論 JSON parse error, fallback:", err);
+    return [{ type: "track", keyword: query }];
+  }
+}
+
+// 2. 分類関数（推論結果から検索用に選ぶ）
+async function classifyInference(inference: any[]) {
+  const prompt = `
+あなたはSpotify検索用の分類アシスタントです。
+次の入力から、検索タイプを "track" / "artist" / "album" のいずれかに分類してください。
+出力は JSON 形式で {"type": ..., "keyword": ...} のみ返してください。
+
+例:
+入力: [{"type":"track","keyword":"Lemon"},{"type":"artist","keyword":"米津玄師"}]
+出力: {"type": "track", "keyword": "Lemon 米津玄師"}
+
+入力: [{"type":"album","keyword":"First Love"},{"type":"artist","keyword":"宇多田ヒカル"}]
+出力: {"type": "album", "keyword": "First Love"}
+
+入力: [{"type":"track","keyword":"前前前世"},{"type":"artist","keyword":"RADWIMPS"}]
+出力: {"type": "track", "keyword": "前前前世 RADWIMPS"}
+
+入力: ${JSON.stringify(inference)}
+出力:
+`;
+
+  const response = await ollama.chat({
+    model: OLLAMA_MODEL,
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  let content = response.message.content;
+  content = content.replace(/```json\s*([\s\S]*?)```/i, "$1").trim();
+
+  try {
+    const json = JSON.parse(content);
+    return json; // {type, keyword}
+  } catch (err) {
+    console.warn("Ollama 分類 JSON parse error, fallback:", err);
+    return { type: inference[0]?.type || "track", keyword: inference[0]?.keyword || "" };
   }
 }
 
@@ -112,8 +154,15 @@ server.tool(
     query: z.string({ description: "検索したい曲名やアーティスト名" }),
   },
   async ({ query }) => {
-    const { type, keyword } = await classifyQuery(query);
+    // 1. Ollama で自由推論
+    const inference = await ollamaFreeInference(query);
+    console.log("Ollama inference:", inference);
 
+    // 2. 推論結果を分類して Spotify 検索用に変換
+    const { type, keyword } = await classifyInference(inference);
+    console.log("Selected for Spotify:", type, keyword);
+
+    // 3. Spotify検索
     const token = await getAccessToken();
     const res = await fetch(
       `https://api.spotify.com/v1/search?q=${encodeURIComponent(
