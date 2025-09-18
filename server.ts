@@ -7,6 +7,8 @@ import { DirectServerTransport } from "./libs/direct-transport.js";
 import { WeatherServer } from "./mcp-servers/get-weather.js";
 import { TimeServer } from "./mcp-servers/get-current-time.js";
 import { SpotifyServer } from "./mcp-servers/search-track.js";
+import { BraveSearchServer } from "./mcp-servers/brave-search.js";
+import { OllamaServer } from "./mcp-servers/ollama-server.js";
 
 // 環境変数から取得
 const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID!;
@@ -30,7 +32,7 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
-const servers = [WeatherServer, TimeServer, SpotifyServer];
+const servers = [WeatherServer, TimeServer, SpotifyServer, BraveSearchServer, OllamaServer];
 const clients: Record<string, Client> = {};
 
 (async () => {
@@ -42,6 +44,7 @@ const clients: Record<string, Client> = {};
 
     const tools = await client.listTools();
     for (const tool of tools.tools) {
+      // NOTE: tool 名の衝突に注意。現状は最後に登録したものが優先される。
       clients[tool.name] = client;
     }
   }
@@ -58,7 +61,7 @@ app.post("/api/tool/:name", async (req, res) => {
 
   try {
     const result = await client.callTool({ name: toolName, arguments: args });
-    res.json(result);
+    res.json({ content: result.content });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
