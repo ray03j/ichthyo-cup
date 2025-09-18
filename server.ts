@@ -88,6 +88,12 @@ app.get("/api/auth/login", (req, res) => {
   res.redirect(`https://accounts.spotify.com/authorize?${query.toString()}`);
 });
 
+app.get("/api/auth/logout", (req, res) => {
+  res.clearCookie("spotify_access_token");
+  res.clearCookie("spotify_auth_state");
+  res.json({ message: "Logged out" });
+});
+
 // --- Spotify コールバック ---
 app.get("/api/auth/callback", async (req, res) => {
   const code = req.query.code as string | undefined;
