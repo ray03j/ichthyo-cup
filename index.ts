@@ -9,6 +9,7 @@ import {WeatherServer} from "./mcp-servers/get-weather.js";
 import type {McpServer} from "@modelcontextprotocol/sdk/server/mcp.js";
 import {SpotifyServer} from "./mcp-servers/search-track.js";
 import {BraveSearchServer} from "./mcp-servers/brave-search.js";
+import {OllamaServer} from "./mcp-servers/ollama-server.js";
 
 // MCP ツールをまとめて管理する型
 type McpTools = {
@@ -62,49 +63,60 @@ const query = async (
 ) => {
     console.log(`\n[question] ${prompt}`);
 
-    // Ollama に質問を投げる
-    const response = await client.generate({model, prompt});
+    // 分類結果を格納する変数
+    let parsed: { type: string; keyword: string }[] = [];
 
-    // 型安全のため any にキャスト
-    const r: any = response;
-
-    // モデルからの回答テキストを整形
-    let text = "";
-    if (r.output && Array.isArray(r.output)) {
-        text = r.output
-            .map((o: any) =>
-                o.content.map((c: any) => ("text" in c ? c.text : "")).join(""),
-            )
-            .join("\n");
-    }
-
-    console.log("[answer]", text);
-
-    // MCP ツールを順番に呼び出す
     for (const tool of mcpTools.tools) {
         const mcpClient = mcpTools.functionMap[tool.name];
-        if (mcpClient) {
-            let args: Record<string, any> = {};
+        if (!mcpClient) continue;
 
-            // ツールごとに必要な引数を準備
-            if (tool.name === "get-weather") {
-                args = {name: "東京"}; // 東京の天気を取得
-            }
-            // get-current-time は引数不要
+        let args: Record<string, any> = {};
 
-            // ツールを呼び出し
-            const toolResult = await mcpClient.callTool({
-                name: tool.name,
-                arguments: args,
-            });
-
-            // ツールの結果を表示
-            const content = toolResult.content as any[];
-            content.forEach((c) => {
-                if (c.type === "text")
-                    console.log(`[tool: ${tool.name}]`, c.text);
-            });
+        // ツールごとに必要な引数を準備
+        if (tool.name === "get-weather") {
+            args = { name: "東京" };
+        } else if (tool.name === "classify-spotify-query-search") {
+            args = { query: prompt };
+        } else if (tool.name === "search-spotify") {
+            args = { query: parsed }; // 分類結果を渡す
         }
+
+        // ツール呼び出し
+        const toolResult = await mcpClient.callTool({
+            name: tool.name,
+            arguments: args,
+        });
+
+        // 結果のログ出力
+        const content = toolResult.content as any[];
+        content.forEach((c) => {
+            if (c.type === "text") console.log(`[tool: ${tool.name}]`, c.text);
+        });
+
+        // classify-spotify-query-search の結果を parsed に格納
+        if (tool.name === "classify-spotify-query-search" && content.length > 0) {
+            try {
+                parsed = JSON.parse(content[0].text);
+            } catch (e) {
+                console.warn("Failed to parse classification result, fallback:", e);
+                parsed = [];
+            }
+        }
+    }
+
+    // 必要であれば Ollama にも質問を投げる
+    if (model) {
+        const response = await client.generate({ model, prompt });
+        const r: any = response;
+        let text = "";
+        if (r.output && Array.isArray(r.output)) {
+            text = r.output
+                .map((o: any) =>
+                    o.content.map((c: any) => ("text" in c ? c.text : "")).join("")
+                )
+                .join("\n");
+        }
+        console.log("[answer]", text);
     }
 };
 
@@ -132,6 +144,7 @@ async function main() {
         WeatherServer,
         SpotifyServer,
         BraveSearchServer,
+        OllamaServer,
     ]);
 
     const ollama = new Ollama({host});

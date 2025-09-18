@@ -50,10 +50,21 @@ async function braveSearch(query: string): Promise<string> {
 OllamaServer.tool(
   "classify-spotify-query",
   "自然文をSpotify検索用の {type, keyword} に変換する",
-  {
-    query: z.string({ description: "ユーザーの自然文入力" }),
-  },
-  async ({ query }) => {
+  async ({ query }, context) => {
+    // context から MCP クライアントを取得
+    const braveClient = context?.clients?.find(c => c.name === "BraveSearchServer");
+    let searchResults = "";
+
+    if (braveClient) {
+      const res = await braveClient.callTool({ name: "brave-search", arguments: { query } });
+      const content = res.content?.[0]?.text || "[]";
+      const results = JSON.parse(content);
+      searchResults = results
+        .slice(0, 20)
+        .map((item: any) => `Title: ${item.title}\nURL: ${item.url}\nSnippet: ${item.description}`)
+        .join("\n\n---\n\n");
+    }
+
     const prompt = `
 あなたはSpotify検索用の分類アシスタントです。
 ユーザーの入力に応じて、検索タイプを以下のカテゴリに分類してください:
@@ -123,9 +134,7 @@ OllamaServer.tool(
     query: z.string({ description: "ユーザーの自然文入力" }),
   },
   async ({ query }) => {
-    console.log(`[Brave Search] Searching for: "${query}"`);
     const searchResults = await braveSearch(query);
-    console.log("[Brave Search] Results received.");
 
     const prompt = `
 # 命令(Instruction)
@@ -172,7 +181,10 @@ keywordは具体的な楽曲、アーティスト、アルバム、またはプ�
 ]
 
 # 出力
-    `;
+    `.replace(
+      "${searchResults}",
+      searchResults,
+    );
 
     const response = await ollama.chat({
       model: OLLAMA_MODEL,
@@ -184,8 +196,7 @@ keywordは具体的な楽曲、アーティスト、アルバム、またはプ�
 
     let resultText = "";
     try {
-      const json = JSON.parse(content);
-      resultText = JSON.stringify(json);
+      resultText = JSON.stringify(JSON.parse(content));
     } catch {
       resultText = JSON.stringify([{ type: "track", keyword: query }]);
     }
