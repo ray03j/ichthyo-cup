@@ -1,5 +1,5 @@
-import {McpServer} from "@modelcontextprotocol/sdk/server/mcp.js";
-import {z} from "zod";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
 
 const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID!;
 const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET!;
@@ -24,19 +24,24 @@ const server = new McpServer({
     version: "1.0.0",
 });
 
+// type enum に playlist を追加
 server.tool(
     "search-spotify",
-    "Spotifyで曲を検索する",
+    "Spotifyで曲/アルバム/アーティスト/プレイリストを検索する",
     {
-        type: z.enum(["track", "artist", "album"]),
-        keyword: z.string({ description: "検索キーワード（track/album の場合は「曲名 アーティスト名」形式推奨）" }),
+        type: z.enum(["track", "artist", "album", "playlist"]),
+        keyword: z.string({
+            description: "検索キーワード（track/album の場合は「曲名 アーティスト名」形式推奨）",
+        }),
     },
     async ({ type, keyword }) => {
         const token = await getAccessToken();
 
         const res = await fetch(
-            `https://api.spotify.com/v1/search?q=${encodeURIComponent(keyword)}&type=${type}&limit=3&market=JP`,
-            { headers: { Authorization: `Bearer ${token}` } },
+            `https://api.spotify.com/v1/search?q=${encodeURIComponent(
+                keyword
+            )}&type=${type}&limit=3&market=JP`,
+            { headers: { Authorization: `Bearer ${token}` } }
         );
 
         if (!res.ok) {
@@ -59,13 +64,16 @@ server.tool(
                 return `Artist: ${item.name} (${item.external_urls.spotify})`;
             } else if (type === "album") {
                 return `Album: ${item.name} - ${item.artists.map((a: any) => a.name).join(", ")} (${item.external_urls.spotify})`;
+            } else if (type === "playlist") {
+                return `Playlist: ${item.name} - ${item.owner.display_name} (${item.external_urls.spotify})`;
             }
             return "";
         });
 
         return {
-            content: [{type: "text", text: results.join("\n")}]};
-    },
+            content: [{ type: "text", text: results.join("\n") }],
+        };
+    }
 );
 
 export const SpotifyServer = server;
